@@ -618,16 +618,34 @@ deploy_keycloak() {
         print_message "yellow" "Found existing Keycloak container ($keycloak_container) with matching version"
         reuse_existing=true
         
-        current_port=$(docker port "$keycloak_container" 8080/tcp | cut -d: -f1)
-        # Check if port needs to be updated
-        if [ "$current_port" != "$desired_port" ]; then
-            print_message "yellow" "Port mismatch (current: $current_port, desired: $desired_port). Recreating container..."
-            # Stop and remove existing container
-            docker rm -f "$keycloak_container" || {
-                print_message "red" "Failed to remove existing container"
-                exit 1
-            }
-            reuse_existing=false
+        # Check if the container is running
+        container_running=$(docker inspect -f '{{.State.Running}}' "$keycloak_container")
+
+        if [ "$container_running" = "true" ]; then
+            current_port=$(docker port "$keycloak_container" 8080/tcp | cut -d: -f1)
+            
+            if [ "$current_port" != "$desired_port" ]; then
+                print_message "yellow" "Port mismatch (current: $current_port, desired: $desired_port). Recreating container..."
+                docker rm -f "$keycloak_container" || {
+                    print_message "red" "Failed to remove existing container"
+                    exit 1
+                }
+                reuse_existing=false
+            fi
+        else
+            print_message "yellow" "Keycloak container exists but is stopped. Reusing container if port matches..."
+
+            # Get the port mapping from container config (even if stopped)
+            host_port=$(docker inspect -f '{{range $p, $conf := .HostConfig.PortBindings}}{{$p}} -> {{(index $conf 0).HostPort}}{{end}}' "$keycloak_container" | grep '^8080/tcp' | awk '{print $NF}')
+
+            if [ "$host_port" != "$desired_port" ]; then
+                print_message "yellow" "Port mismatch for stopped container (current: $host_port, desired: $desired_port). Recreating container..."
+                docker rm -f "$keycloak_container" || {
+                    print_message "red" "Failed to remove existing container"
+                    exit 1
+                }
+                reuse_existing=false
+            fi
         fi
     fi
 
@@ -665,8 +683,8 @@ deploy_keycloak() {
         fi
     fi
 
-    if postgres_setup; then
-        docker compose -f $DOCKER_COMPOSE_POSTGRES up -d
+    if [ "$postgres_setup" = true ]; then
+        docker compose -f "$DOCKER_COMPOSE_POSTGRES" up -d
     fi
     docker compose -f docker-compose.nats.yml up -d
     docker compose -f docker-compose.redis.yml up -d
@@ -905,10 +923,10 @@ configure_env() {
 
 start_services() {
     configure_env
-    # Start main service
-    pnpm run start &
     
-    # Start other services in separate terminals
+    # Start services in separate terminals
+    gnome-terminal --tab --title="Api-gateway" -- bash -c "pnpm run start; exec bash"
+    sleep 10    
     gnome-terminal --tab --title="User Service" -- bash -c "pnpm run start user; exec bash"
     sleep 10
     gnome-terminal --tab --title="Utility Service" -- bash -c "pnpm run start utility; exec bash"
