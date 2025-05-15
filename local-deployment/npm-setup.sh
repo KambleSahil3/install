@@ -181,9 +181,6 @@ update_ports_config() {
     sed_inplace "
         s|[0-9]*:6379|${USED_PORTS["redis"]}:6379|;
     " docker-compose.redis.yml
-    sed_inplace "
-    s|^SERVER_URL=.*|SERVER_URL=http://your-ip:${USED_PORTS["schema-file-server"]}|;
-    " agent.env
     print_message "green" "Updated .env file and docker-compose available ports"
 }
 
@@ -360,7 +357,9 @@ EOF
     docker compose -f docker-compose.nats.yml up -d
     docker compose -f docker-compose.redis.yml up -d
 
-    sed_inplace "s|your-ip|$(escape_sed "$MACHINE_IP")|g" agent.env
+    sed_inplace "
+    s|^SERVER_URL=.*|SERVER_URL=http://$MACHINE_IP:${USED_PORTS["schema-file-server"]}|;
+    " agent.env
     print_message "green" "Environment file configured successfully."
 }
 
