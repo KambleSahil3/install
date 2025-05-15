@@ -889,17 +889,15 @@ setup_schema_service(){
 
 configure_env() {
     # Path to your .env file (adjust if needed)
-    local env_file=".env"
-    
-    # Comment out the first 3 AFJ docker lines
-    sed -i 's/^AFJ_AGENT_TOKEN_PATH=/#AFJ_AGENT_TOKEN_PATH=/' "$env_file"
-    sed -i 's/^AFJ_AGENT_SPIN_UP=/#AFJ_AGENT_SPIN_UP=/' "$env_file"
-    sed -i 's/^AFJ_AGENT_ENDPOINT_PATH=/#AFJ_AGENT_ENDPOINT_PATH=/' "$env_file"
-    
-    # Uncomment the last 3 AFJ local lines
-    sed -i 's/^#AFJ_AGENT_TOKEN_PATH=/AFJ_AGENT_TOKEN_PATH=/' "$env_file"
-    sed -i 's/^#AFJ_AGENT_SPIN_UP=/AFJ_AGENT_SPIN_UP=/' "$env_file"
-    sed -i 's/^#AFJ_AGENT_ENDPOINT_PATH=/AFJ_AGENT_ENDPOINT_PATH=/' "$env_file"
+
+    sed_inplace "
+        s|^AFJ_AGENT_TOKEN_PATH=/agent-provisioning/AFJ/token/|#AFJ_AGENT_TOKEN_PATH=/agent-provisioning/AFJ/token/|;
+        s|^AFJ_AGENT_SPIN_UP=/agent-provisioning/AFJ/scripts/docker_start_agent.sh|#AFJ_AGENT_SPIN_UP=/agent-provisioning/AFJ/scripts/docker_start_agent.sh|;
+        s|^AFJ_AGENT_ENDPOINT_PATH=/agent-provisioning/AFJ/endpoints/|#AFJ_AGENT_ENDPOINT_PATH=/agent-provisioning/AFJ/endpoints/|;
+        s|^# AFJ_AGENT_TOKEN_PATH=/apps/agent-provisioning/AFJ/token/|AFJ_AGENT_TOKEN_PATH=/apps/agent-provisioning/AFJ/token/|;
+        s|^# AFJ_AGENT_SPIN_UP=/apps/agent-provisioning/AFJ/scripts/start_agent.sh|AFJ_AGENT_SPIN_UP=/apps/agent-provisioning/AFJ/scripts/start_agent.sh|;
+        s|^# AFJ_AGENT_ENDPOINT_PATH=/apps/agent-provisioning/AFJ/endpoints/|AFJ_AGENT_ENDPOINT_PATH=/apps/agent-provisioning/AFJ/endpoints/|;
+    " .env
     
     echo "Configured .env file for local execution"
 }
@@ -938,7 +936,7 @@ start_services() {
     sleep 10
     gnome-terminal --tab --title="Webhook Service" -- bash -c "pnpm run start webhook; exec bash"
     sleep 10
-    gnome-terminal --tab --title="Geolocation Service" -- bash -c "pnpm run start geolocation; exec bash"
+    gnome-terminal --tab --title="Geolocation Service" -- bash -c "pnpm run start geo-location; exec bash"
     sleep 10
     gnome-terminal --tab --title="Notification Service" -- bash -c "pnpm run start notification; exec bash"
     sleep 10
