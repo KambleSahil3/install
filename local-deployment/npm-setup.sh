@@ -62,7 +62,7 @@ prompt_yes_no() {
 
 # Step 1: Clone repository
 clone_platform(){
-    print_message "blue" "\n Setting up CREDEBL studio..."
+    print_message "blue" "\n Setting up CREDEBL Platform..."
     
     read -p "Provide branch name you want to work on: " BRANCH
     echo "You entered branch: $BRANCH"
@@ -181,7 +181,9 @@ update_ports_config() {
     sed_inplace "
         s|[0-9]*:6379|${USED_PORTS["redis"]}:6379|;
     " docker-compose.redis.yml
-
+    sed_inplace "
+    s|^SERVER_URL=.*|SERVER_URL=http://your-ip:${USED_PORTS["schema-file-server"]}|;
+    " agent.env
     print_message "green" "Updated .env file and docker-compose available ports"
 }
 
@@ -292,6 +294,7 @@ prepare_environment_variable() {
         print_message "red" "Failed to update .env file"
         exit 1
     }
+    sed_inplace "s|your-ip|$(escape_sed "$MACHINE_IP")|g" agent.env
 
     # Postgres installation and env update regarding postgres
     USE_EXISTING_POSTGRES=false
@@ -908,15 +911,15 @@ start_services() {
     
     # Start other services in separate terminals
     gnome-terminal --tab --title="User Service" -- bash -c "pnpm run start user; exec bash"
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Utility Service" -- bash -c "pnpm run start utility; exec bash"
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Connection Service" -- bash -c "pnpm run start connection; exec bash"
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Ledger Service" -- bash -c "pnpm run start ledger; exec bash"
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Organization Service" -- bash -c "pnpm run start organization; exec bash"
-    sleep 30
+    sleep 10
 
     # Start agent-provisioning and wait for it to be ready
     gnome-terminal --tab --title="Agent Provisioning" -- bash -c \
@@ -928,17 +931,17 @@ start_services() {
     done; exec bash"
     
     # Start remaining services
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Issuance Service" -- bash -c "pnpm run start issuance; exec bash"
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Verification Service" -- bash -c "pnpm run start verification; exec bash"
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Webhook Service" -- bash -c "pnpm run start webhook; exec bash"
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Geolocation Service" -- bash -c "pnpm run start geolocation; exec bash"
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Notification Service" -- bash -c "pnpm run start notification; exec bash"
-    sleep 30
+    sleep 10
     gnome-terminal --tab --title="Cloud Wallet Service" -- bash -c "pnpm run start cloud-wallet; exec bash"
 }
 
