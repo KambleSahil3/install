@@ -765,9 +765,7 @@ generate_jwt_secret() {
     fi
 
     # Update .env file
-    echo APP_PORT=${USED_PORTS["schema-file-server"]} >> .env
-    echo ISSUER=Credebl >> .env
-    echo "JWT_TOKEN_SECRET=$JWT_TOKEN_SECRET" >> .env || {
+    sed_inplace "s/^JWT_TOKEN_SECRET=.*/JWT_TOKEN_SECRET=$JWT_TOKEN_SECRET/" .env || {
         print_message "red" "Failed to update JWT secret in .env"
         exit 1
     }
