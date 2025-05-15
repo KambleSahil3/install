@@ -7,7 +7,7 @@ LOG_FILE="deployment.log"
 KEYCLOAK_VERSION="25.0.6"
 TERRAFORM_REPO="https://github.com/KambleSahil3/keycloak.git"
 DOCKER_COMPOSE_FILE="docker-compose.yml"
-MASTER_TABLE_FILE="$PWD/libs/prisma-service/prisma/data/"
+MASTER_TABLE_FILE="$PWD/platform/libs/prisma-service/prisma/data/"
 
 # Initialize logging
 exec > >(tee -a "${LOG_FILE}") 2>&1
@@ -179,8 +179,8 @@ update_ports_config() {
         s|^DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:postgres@your-ip:${USED_PORTS["postgres"]}/credebl|;
     " .env
     sed_inplace "
-        s|[0-9]*:4000|${USED_PORTS["schema-file-server"]}:4000|;
-    " docker-compose.yml
+        s|[0-9]*:6379|${USED_PORTS["redis"]}:6379|;
+    " docker-compose.redis.yml
 
     print_message "green" "Updated .env file and docker-compose available ports"
 }
@@ -790,6 +790,8 @@ pull_credo_controller() {
 update_master_table() {
     print_message "blue" "Updating master table configuration..."
 
+    npm install -g pnpm
+    pnpm i
     cd $MASTER_TABLE_FILE || {
         print_message "red" "Failed to change directory to $MASTER_TABLE_FILE"
         exit 1
@@ -816,7 +818,7 @@ update_master_table() {
     }
     
     sed_inplace "s|###Sendgrid Key###|$SENDGRID_API_KEY|g" credebl-master-table.json || {
-        print_message "red" "Failed to update SendGrid key in master table"
+        print_message "red" "Failed to update SendGridAgent-Provisioning-Service Microservice is listening to NATS key in master table"
         exit 1
     }
     
@@ -825,14 +827,21 @@ update_master_table() {
         exit 1
     }
     
-    cd ../../../..
     print_message "green" "Master table configuration updated successfully."
+}
+
+prisma_setup() {
+    cd ../..
+    npx prisma generate
+    npx prisma migrate deploy
+    npx prisma db seed
+    cd ../..
 }
 
 setup_schema_service(){
 
     print_message "blue" "Setting up Schema Service..."
-
+    docker rm schema-file-server -f
     docker run -d \
             -p ${USED_PORTS["schema-file-server"]}:4000 \
             --name schema-file-server \
@@ -876,3 +885,81 @@ setup_schema_service(){
     sudo chmod 777 $PWD/apps/schemas
     print_message "green" "Schema File Server configuration updated successfully"
 }
+
+configure_env() {
+    # Path to your .env file (adjust if needed)
+    local env_file=".env"
+    
+    # Comment out the first 3 AFJ docker lines
+    sed -i 's/^AFJ_AGENT_TOKEN_PATH=/#AFJ_AGENT_TOKEN_PATH=/' "$env_file"
+    sed -i 's/^AFJ_AGENT_SPIN_UP=/#AFJ_AGENT_SPIN_UP=/' "$env_file"
+    sed -i 's/^AFJ_AGENT_ENDPOINT_PATH=/#AFJ_AGENT_ENDPOINT_PATH=/' "$env_file"
+    
+    # Uncomment the last 3 AFJ local lines
+    sed -i 's/^#AFJ_AGENT_TOKEN_PATH=/AFJ_AGENT_TOKEN_PATH=/' "$env_file"
+    sed -i 's/^#AFJ_AGENT_SPIN_UP=/AFJ_AGENT_SPIN_UP=/' "$env_file"
+    sed -i 's/^#AFJ_AGENT_ENDPOINT_PATH=/AFJ_AGENT_ENDPOINT_PATH=/' "$env_file"
+    
+    echo "Configured .env file for local execution"
+}
+
+start_services() {
+    configure_env
+    # Start main service
+    pnpm run start &
+    
+    # Start other services in separate terminals
+    gnome-terminal --tab --title="User Service" -- bash -c "pnpm run start user; exec bash"
+    sleep 30
+    gnome-terminal --tab --title="Utility Service" -- bash -c "pnpm run start utility; exec bash"
+    sleep 30
+    gnome-terminal --tab --title="Connection Service" -- bash -c "pnpm run start connection; exec bash"
+    sleep 30
+    gnome-terminal --tab --title="Ledger Service" -- bash -c "pnpm run start ledger; exec bash"
+    sleep 30
+    gnome-terminal --tab --title="Organization Service" -- bash -c "pnpm run start organization; exec bash"
+    sleep 30
+
+    # Start agent-provisioning and wait for it to be ready
+    gnome-terminal --tab --title="Agent Provisioning" -- bash -c \
+    "pnpm run start agent-provisioning | while read -r line; do \
+        echo \"\$line\"; \
+        if [[ \"\$line\" == *\"Agent-Provisioning-Service Microservice is listening to NATS\"* ]]; then \
+            gnome-terminal --tab --title=\"Agent Service\" -- bash -c \"pnpm run start agent-service; exec bash\"; \
+        fi; \
+    done; exec bash"
+    
+    # Start remaining services
+    sleep 30
+    gnome-terminal --tab --title="Issuance Service" -- bash -c "pnpm run start issuance; exec bash"
+    sleep 30
+    gnome-terminal --tab --title="Verification Service" -- bash -c "pnpm run start verification; exec bash"
+    sleep 30
+    gnome-terminal --tab --title="Webhook Service" -- bash -c "pnpm run start webhook; exec bash"
+    sleep 30
+    gnome-terminal --tab --title="Geolocation Service" -- bash -c "pnpm run start geolocation; exec bash"
+    sleep 30
+    gnome-terminal --tab --title="Notification Service" -- bash -c "pnpm run start notification; exec bash"
+    sleep 30
+    gnome-terminal --tab --title="Cloud Wallet Service" -- bash -c "pnpm run start cloud-wallet; exec bash"
+}
+
+main(){
+    clone_platform
+    prepare_env_file
+    configure_ports
+    prepare_environment_variable
+    install_docker
+    install_terraform
+    deploy_keycloak
+    setup_keycloak_terraform
+    update_keycloak_secret
+    generate_jwt_secret
+    pull_credo_controller
+    update_master_table
+    prisma_setup
+    setup_schema_service
+    start_services
+}
+
+main
