@@ -350,12 +350,8 @@ services:
 volumes:
   platform-volume:
 EOF
-
-    docker compose -f $DOCKER_COMPOSE_POSTGRES up -d
+    postgres_setup=true
     fi
-
-    docker compose -f docker-compose.nats.yml up -d
-    docker compose -f docker-compose.redis.yml up -d
 
     sed_inplace "
     s|^SERVER_URL=.*|SERVER_URL=http://$MACHINE_IP:${USED_PORTS["schema-file-server"]}|;
@@ -611,7 +607,7 @@ install_terraform_macos() {
     print_message "green" "Terraform installed successfully."
 }
 
-# Step 4: Deploy Keycloak
+# Step 4: Deploy Keycloak and Postgres
 deploy_keycloak() {
     local reuse_existing=false
     local desired_port=${USED_PORTS["keycloak"]}
@@ -668,6 +664,12 @@ deploy_keycloak() {
             print_message "green" "Using existing Keycloak container ($keycloak_container)"
         fi
     fi
+
+    if postgres_setup; then
+        docker compose -f $DOCKER_COMPOSE_POSTGRES up -d
+    fi
+    docker compose -f docker-compose.nats.yml up -d
+    docker compose -f docker-compose.redis.yml up -d
 }
 
 # Step 5: Setup Keycloak using Terraform
